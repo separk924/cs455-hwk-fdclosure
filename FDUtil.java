@@ -1,12 +1,13 @@
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.HashSet;
 
 /**
  * This utility class is not meant to be instantitated, and just provides some
  * useful methods on FD sets.
  * 
- * @author <<YOUR NAME>>
- * @version <<DATE>>
+ * @author Seung Park
+ * @version 10.26.22
  */
 public final class FDUtil {
 
@@ -17,10 +18,26 @@ public final class FDUtil {
    * @return a set of trivial FDs with respect to the given FDSet
    */
   public static FDSet trivial(final FDSet fdset) {
-    // TODO: Obtain the power set of each FD's left-hand attributes. For each
-    // element in the power set, create a new FD and add it to the a new FDSet.
-
-    return null;
+    // deep copy of the set
+    FDSet copy = new FDSet(fdset);
+    Set<Set<String>> theSet = new HashSet<>();
+    Set<Set<String>> lefts = new HashSet<>();
+    FDSet newFDFdSet = new FDSet();
+    for (FD fd : copy) {
+      Set<String> left = new HashSet<>();
+      left = fd.getLeft();
+      lefts.add(left);
+      // Obtain the power set of each FD's left-hand attributes.
+      theSet.addAll(powerSet(left));
+      // For each element in the power set, create new FD and add to new FDSet.
+      for (Set<String> inner : theSet) {
+        if (!inner.isEmpty()) {
+          FD func = new FD(left, inner);
+          newFDFdSet.add(func);
+        }
+      }
+    }
+    return newFDFdSet;
   }
 
   /**
@@ -31,10 +48,13 @@ public final class FDUtil {
    * @return a set of augmented FDs
    */
   public static FDSet augment(final FDSet fdset, final Set<String> attrs) {
-    // TODO: Copy each FD in the given set and then union both sides with the given
-    // set of attributes, and add this augmented FD to a new FDSet.
-
-    return null;
+    // deep copy of the set
+    FDSet copy = new FDSet(fdset);
+    for (FD fd : copy) {
+      fd.addToLeft(attrs); // add attributes to left
+      fd.addToRight(attrs); // add attributes to right
+    }
+    return copy;
   }
 
   /**
@@ -44,11 +64,51 @@ public final class FDUtil {
    * @return all transitive FDs with respect to the input FD set
    */
   public static FDSet transitive(final FDSet fdset) {
-    // TODO: Examine each pair of FDs in the given set. If the transitive property
-    // holds on the pair of FDs, then generate the new FD and add it to a new FDSet.
-    // Repeat until no new transitive FDs are found.
 
-    return null;
+    FDSet copy = new FDSet(fdset);
+    FDSet newD = new FDSet();
+    FDSet theSet = new FDSet();
+
+    for (FD fd : copy) {
+      for (FD fd2 : copy) {
+        if (!fd.equals(fd2)) {
+          // if the transitive rule holds
+          if (fd.getRight().equals(fd2.getLeft())) {
+            FD elem = new FD(fd.getLeft(), fd2.getRight());
+            theSet.add(elem);
+            newD.add(elem);
+          }
+        }
+      }
+    }
+
+    // union the dependencies where rule holds with the original set
+    newD.addAll(copy);
+
+    // if there were no new FDs added, return the set
+    if (newD.size() == copy.size()) {
+      return theSet;
+    }
+
+    // recurse on new set of FD's
+    theSet = FDUtil.transitive(newD);
+
+    return theSet;
+  }
+
+  /**
+   * Gets all attributes of a set
+   * 
+   * @param fdset FD Set
+   * @return set of attributes
+   */
+  public static Set<String> attributes(FDSet fdSet) {
+    Set<String> theSet = new TreeSet<>();
+    for (FD fd : fdSet) {
+      theSet.addAll(fd.getLeft());
+      theSet.addAll(fd.getRight());
+    }
+    return theSet;
   }
 
   /**
@@ -58,13 +118,43 @@ public final class FDUtil {
    * @return the closure of the input FD Set
    */
   public static FDSet fdSetClosure(final FDSet fdset) {
-    // TODO: Use the FDSet copy constructor to deep copy the given FDSet
+    FDSet copy = new FDSet(fdset); // deep copy of the given FDSet
+    FDSet closure = new FDSet(); // set closure set
+    FDSet added = new FDSet(); // changed set
 
-    // TODO: Generate new FDs by applying Trivial and Augmentation Rules, followed
-    // by Transitivity Rule, and add new FDs to the result.
-    // Repeat until no further changes are detected.
+    FDSet trivial = trivial(copy); // gets trivial
+    FDSet augment = new FDSet(fdset); // copy for augmenting
+    FDSet transitive = transitive(copy); // gets transitive
 
-    return null;
+    // gets all attributes
+    Set<Set<String>> attributes = FDUtil.powerSet(FDUtil.attributes(copy));
+    // augments the set
+    for (Set<String> set : attributes) {
+      if (set.size() != 0) {
+        augment.addAll(augment(copy, set));
+      }
+    }
+
+    // unions the changed sets into added & set closure set
+    closure.addAll(trivial);
+    closure.addAll(augment);
+    closure.addAll(transitive);
+    added.addAll(trivial);
+    added.addAll(augment);
+    added.addAll(transitive);
+
+    // unions original set with changed set
+    added.addAll(copy);
+
+    // if no changes were made, return the set closure
+    if (copy.size() == added.size()) {
+      return closure;
+    }
+
+    // recurse on the changed set
+    closure = fdSetClosure(added);
+
+    return closure;
   }
 
   /**
